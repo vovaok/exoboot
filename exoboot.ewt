@@ -1058,6 +1058,9 @@
     </file>
   </group>
   <file>
+    <name>$PROJ_DIR$\config.h</name>
+  </file>
+  <file>
     <name>$PROJ_DIR$\main.cpp</name>
   </file>
   <file>
