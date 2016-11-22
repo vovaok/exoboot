@@ -4,8 +4,9 @@
 |                                                                              |
 \******************************************************************************/
 
+#define UNICTL
 //#define EXOCTRL2
-#define EXOMOTOR
+//#define EXOMOTOR
 
 #if defined(EXOCTRL2)
 
@@ -22,6 +23,23 @@
     #define WIFI_USART_TX       USART1_TX_PA9
     #define WIFI_USART_RX       USART1_RX_PA10
     #define WIFI_RESET_PIN      PA8
+
+#elif defined(UNICTL)
+
+    #define WIFI_INTERFACE      1
+
+    #define ONB_CLASS           (cidLedController | 0x01)
+
+    #define ADDRESS             15
+
+    #define LED_RED_PIN         PC6
+    #define LED_GREEN_PIN       PC7
+    #define LED_BLUE_PIN        PB7
+
+    #define WIFI_USART_TX       USART3_TX_PC10
+    #define WIFI_USART_RX       USART3_RX_PC11
+    #define WIFI_RESET_PIN      PC12
+    #define WIFI_ENABLE_PIN     PD2
 
 #elif defined(EXOMOTOR)
 

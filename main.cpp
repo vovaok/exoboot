@@ -88,9 +88,13 @@ public:
         registerTaskEvent(EVENT(&App::bootldrTask));
         
         Usart *wifiUsart = new Usart(Gpio::WIFI_USART_TX, Gpio::WIFI_USART_RX);
+    #if defined(WIFI_ENABLE_PIN)
+        Led *wifiEn = new Led(Gpio::WIFI_ENABLE_PIN);
+        wifiEn->on();
+    #endif
         wifi = new ESP8266(wifiUsart, Gpio::WIFI_RESET_PIN);
         wifi->autoConnectToHost("", 51966);
-    //    wifi->onReady = EVENT(&App::wifiReady);
+//        wifi->onReady = EVENT(&App::wifiReady);
     //    wifi->onError = EVENT(&App::wifiError);
         onb = new UartOnbInterface(wifi);
         
@@ -114,6 +118,11 @@ public:
         if (ledcnt)
             --ledcnt;
     }
+    
+//    void wifiReady()
+//    {
+//        wifi->sendCmd("AT+CIPAP_DEF?");
+//    }
 };
 #endif
 
@@ -163,7 +172,7 @@ int main()
     can = new Can(1, 1000000, Gpio::CAN_RX, Gpio::CAN_TX);
     onb = new CanInterface(can);
     onb->addFilter(0x00800000, 0x10800000); // global service messages
-    onb->addFilter(0x10800000, 0x10800000); // local service messages
+    onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
     
     if (fromAppFlag)
     {
