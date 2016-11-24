@@ -27,7 +27,7 @@ unsigned long base = 0x08020000;
 
 __appinfo_t__ *info = 0L;
 
-Led *ledRed, *ledGreen, *ledBlue;
+Led *ledRed=0L, *ledGreen=0L, *ledBlue=0L;
 
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
 Can *can;
@@ -150,9 +150,13 @@ int main()
         f();
     }
   
+#if defined(LED_PIN)
+    ledBlue  = new Led(Gpio::LED_PIN);
+#else
     ledRed   = new Led(Gpio::LED_RED_PIN);
     ledGreen = new Led(Gpio::LED_GREEN_PIN);
     ledBlue  = new Led(Gpio::LED_BLUE_PIN);
+#endif
     
 #if defined(ADDRESS)
     mac = ADDRESS & 0x0F;
@@ -177,8 +181,10 @@ int main()
     if (fromAppFlag)
     {
         upgradeAccepted = true;
-        ledRed->on();
-        ledGreen->on();
+        if (ledRed)
+            ledRed->on();
+        if (ledGreen)
+            ledGreen->on();
         sendResponse(aidUpgradeAccepted);
     }   
     
@@ -233,8 +239,10 @@ void App::bootldrTask()
                 if (classId == mClass)
                 {
                     upgradeAccepted = true;
-                    ledRed->on();
-                    ledGreen->on();
+                    if (ledRed)
+                        ledRed->on();
+                    if (ledGreen)
+                        ledGreen->on();
                     sendResponse(aidUpgradeAccepted);
                 }
               } break;
@@ -251,8 +259,10 @@ void App::bootldrTask()
                 upgradeAccepted = false;
                 for (int i=0; i<8; i++)
                     chunks[i] = 0;
-                ledRed->on();
-                ledGreen->off();
+                if (ledRed)
+                    ledRed->on();
+                if (ledGreen)
+                    ledGreen->off();
                 sendResponse(aidUpgradeReady);
                 break;
                 
@@ -269,7 +279,10 @@ void App::bootldrTask()
 //                        }
                     unsigned char sz = msg.data().size();
                     seqs[seq] = sz;
-                    ledGreen->toggle();
+                    if (ledGreen)
+                        ledGreen->toggle();
+                    else
+                        ledBlue->toggle();
                     Flash::programData(base+offset, msg.data().data(), sz);
                     cnt += sz;
                 }
@@ -280,8 +293,10 @@ void App::bootldrTask()
                 upgradeStarted = false;
                 if (testApp())
                     NVIC_SystemReset();
-                ledRed->off();
-                ledGreen->on();
+                if (ledRed)
+                    ledRed->off();
+                if (ledGreen)
+                    ledGreen->on();
                 break;
                 
               case aidUpgradeSetPage:
