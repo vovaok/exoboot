@@ -77,7 +77,7 @@
         </option>
         <option>
           <name>OGLastSavedByProductVersion</name>
-          <state>7.50.3.10745</state>
+          <state>7.40.7.9864</state>
         </option>
         <option>
           <name>GeneralEnableMisra</name>
@@ -105,7 +105,7 @@
         </option>
         <option>
           <name>GenStdoutInterface</name>
-          <state>0</state>
+          <state>1</state>
         </option>
         <option>
           <name>GeneralMisraRules98</name>
@@ -649,13 +649,9 @@
       <name>ILINK</name>
       <archiveVersion>0</archiveVersion>
       <data>
-        <version>17</version>
+        <version>16</version>
         <wantNonLocal>1</wantNonLocal>
         <debug>1</debug>
-        <option>
-          <name>IlinkOutputFile</name>
-          <state>headarm.out</state>
-        </option>
         <option>
           <name>IlinkLibIOConfig</name>
           <state>1</state>
@@ -667,6 +663,10 @@
         <option>
           <name>IlinkInputFileSlave</name>
           <state>0</state>
+        </option>
+        <option>
+          <name>IlinkOutputFile</name>
+          <state>exoboot.out</state>
         </option>
         <option>
           <name>IlinkDebugInfoEnable</name>
@@ -702,7 +702,7 @@
         </option>
         <option>
           <name>IlinkMapFile</name>
-          <state>1</state>
+          <state>0</state>
         </option>
         <option>
           <name>IlinkLogFile</name>
@@ -932,10 +932,6 @@
         <option>
           <name>IlinkThreadsSlave</name>
           <state>1</state>
-        </option>
-        <option>
-          <name>IlinkLogCallGraph</name>
-          <state>0</state>
         </option>
       </data>
     </settings>

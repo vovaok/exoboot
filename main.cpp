@@ -93,7 +93,10 @@ public:
         wifiEn->on();
     #endif
         wifi = new ESP8266(wifiUsart, Gpio::WIFI_RESET_PIN);
+        
+#if !defined(UNICTL)
         wifi->autoConnectToHost("", 51966);
+#endif
 //        wifi->onReady = EVENT(&App::wifiReady);
     //    wifi->onError = EVENT(&App::wifiError);
         onb = new UartOnbInterface(wifi);
