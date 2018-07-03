@@ -4,11 +4,12 @@
 |                                                                              |
 \******************************************************************************/
 
-#define UNICTL
+//#define UNICTL
 //#define UNICTL_SLAVE
 //#define GIRLANDA
 //#define EXOCTRL2
 //#define EXOMOTOR
+#define EXOPULT
 
 #if defined(GIRLANDA)
 #define UNICTL
@@ -85,5 +86,17 @@
 
     #define CAN_RX              CAN1_RX_PB8
     #define CAN_TX              CAN1_TX_PB9
+
+#elif defined(EXOPULT)
+
+    #define CAN_INTERFACE       1
+    #define CAN_RX              CAN1_RX_PB8
+    #define CAN_TX              CAN1_TX_PB9
+    #define ADDRESS             1
+
+    #define ONB_CLASS           (cidExoPult | 0x02)
+    
+    #define LED_PIN             PB7
+    
 
 #endif
