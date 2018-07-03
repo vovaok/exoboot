@@ -5,8 +5,14 @@
 \******************************************************************************/
 
 #define UNICTL
+//#define UNICTL_SLAVE
+//#define GIRLANDA
 //#define EXOCTRL2
 //#define EXOMOTOR
+
+#if defined(GIRLANDA)
+#define UNICTL
+#endif
 
 #if defined(EXOCTRL2)
 
@@ -28,7 +34,11 @@
 
     #define WIFI_INTERFACE      1
 
-    #define ONB_CLASS           (cidLedController | 0x01)
+    #if defined(GIRLANDA)
+        #define ONB_CLASS           (cidLedController | 0x02)
+    #else
+        #define ONB_CLASS           (cidLedController | 0x01)
+    #endif
 
     #define ADDRESS             15
 
@@ -41,6 +51,22 @@
     #define WIFI_USART_RX       UART4_RX_PC11
     #define WIFI_RESET_PIN      PC12
     #define WIFI_ENABLE_PIN     PD2
+
+#elif defined(UNICTL_SLAVE)
+
+    #define CAN_INTERFACE       1
+
+    #define ONB_CLASS           (cidLedController | 0x10 | 0x01)
+
+    #define ADDRESS             15
+
+    #define LED_PIN             PB7
+//    #define LED_RED_PIN         PC6
+//    #define LED_GREEN_PIN       PC7
+//    #define LED_BLUE_PIN        PB7
+
+    #define CAN_RX              CAN1_RX_PB8
+    #define CAN_TX              CAN1_TX_PB9
 
 #elif defined(EXOMOTOR)
 

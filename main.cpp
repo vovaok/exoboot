@@ -93,6 +93,7 @@ public:
         wifiEn->on();
     #endif
         wifi = new ESP8266(wifiUsart, Gpio::WIFI_RESET_PIN);
+        wifi->setDefaultBaudrate(115200);
         
 #if !defined(UNICTL)
         wifi->autoConnectToHost("", 51966);
