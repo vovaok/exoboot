@@ -4,12 +4,12 @@
 |                                                                              |
 \******************************************************************************/
 
-//#define UNICTL
+#define UNICTL
 //#define UNICTL_SLAVE
 //#define GIRLANDA
 //#define EXOCTRL2
 //#define EXOMOTOR
-#define EXOPULT
+//#define EXOPULT
 
 #if defined(GIRLANDA)
 #define UNICTL

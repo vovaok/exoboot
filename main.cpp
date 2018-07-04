@@ -93,13 +93,18 @@ public:
         wifiEn->on();
     #endif
         wifi = new ESP8266(wifiUsart, Gpio::WIFI_RESET_PIN);
+        wifi->hardReset();
         wifi->setDefaultBaudrate(115200);
         
-#if !defined(UNICTL)
-        wifi->autoConnectToHost("", 51966);
+#if defined(UNICTL)
+            wifi->setStationMode("CETKA", "pusipusi");
 #endif
-//        wifi->onReady = EVENT(&App::wifiReady);
+        wifi->autoConnectToHost("", 51966);
+
+        wifi->onReady = EVENT(&App::wifiReady);
     //    wifi->onError = EVENT(&App::wifiError);
+        wifi->onReceiveLine = EVENT(&App::wifiReceiveLine);
+
         onb = new UartOnbInterface(wifi);
         
         mTimer.setTimeoutEvent(EVENT(&App::onTimer));
@@ -123,10 +128,19 @@ public:
             --ledcnt;
     }
     
-//    void wifiReady()
-//    {
-//        wifi->sendCmd("AT+CIPAP_DEF?");
-//    }
+    void wifiReady()
+    {
+        wifi->setBaudrate(500000);
+    }
+    
+    void wifiReceiveLine(string line)
+    {
+        if (!wifi->isOpen())
+        {
+            line += "\n";
+            printf(line.c_str());
+        }
+    }
 };
 #endif
 
@@ -139,9 +153,12 @@ int main()
 //    SysTick_Config((Rcc::sysClk() / 1000)); // 1 ms
 #endif
         
-    bool have = testApp();
+    printf("ExoBoot v1.0\n\n");
+    
+    bool have = testApp();// && 0;
     if (have && !fromAppFlag)
     {
+        printf("Go to app @ 0x80020000\n");
         unsigned long *ptr = (unsigned long*)base;
         void (*f)(void) = reinterpret_cast<void(*)(void)>(*(ptr + 1));
         __disable_irq();
@@ -154,6 +171,9 @@ int main()
         f();
     }
   
+    if (!have)
+        printf("App not found\n");
+    
 #if defined(LED_PIN)
     ledBlue  = new Led(Gpio::LED_PIN);
 #else
@@ -177,6 +197,7 @@ int main()
 #endif
     
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
+    printf("Start boot on CAN interface...\n\n");
     can = new Can(1, 1000000, Gpio::CAN_RX, Gpio::CAN_TX);
     onb = new CanInterface(can);
     onb->addFilter(0x00800000, 0x10800000); // global service messages
@@ -198,11 +219,12 @@ int main()
     }
     
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
-    
+    printf("Start boot on WiFi interface...\n\n");
     App *app = new App;
     app->exec();
     
 #else    
+    printf("No interface!!! FAIL\n");
     while (!onb); // trap if no interface selected
 #endif
 }
@@ -253,6 +275,7 @@ void App::bootldrTask()
                 
               case aidUpgradeConfirm:
                 size = *reinterpret_cast<unsigned long*>(msg.data().data());
+                printf("Accept firmware, size=%d bytes\n", size);
                 Flash::unlock();
                 firstSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base));
                 lastSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base+size-1));
@@ -306,6 +329,7 @@ void App::bootldrTask()
               case aidUpgradeSetPage:
               {
                 int newpage = *reinterpret_cast<unsigned long*>(msg.data().data());
+                printf("page %d\n", newpage);
                 bool done = true;
                 for (int i=0; i<8; i++)
                     if (chunks[i] != 0xFFFFFFFF)
@@ -423,6 +447,7 @@ bool testApp()
             if (app[i] == 0x50415F5F && app[i+1] == 0x464E4950 && app[i+2] == 0x005F5F4F)
             {
                 info = reinterpret_cast<__appinfo_t__*>(app + i);
+                printf("Found app v%d.%d\n", info->ver>>8, info->ver & 0xFF);
                 if (info->length == 0xDeadFace && info->checksum == 0xBaadFeed)
                 {
                     result = true;
