@@ -130,6 +130,7 @@ public:
     
     void wifiReady()
     {
+        //wifi->setEchoEnabled(false);
         wifi->setBaudrate(500000);
     }
     
@@ -137,7 +138,7 @@ public:
     {
         if (!wifi->isOpen())
         {
-            line += "\n";
+            line = "[WIFI]>" + line + "\n";
             printf(line.c_str());
         }
     }
@@ -329,23 +330,63 @@ void App::bootldrTask()
               case aidUpgradeSetPage:
               {
                 int newpage = *reinterpret_cast<unsigned long*>(msg.data().data());
-                printf("page %d\n", newpage);
-                bool done = true;
-                for (int i=0; i<8; i++)
-                    if (chunks[i] != 0xFFFFFFFF)
-                        done = false;
-                if (done || !cnt)
-                {
+                printf("page %d... ", newpage);
+//                bool done = true;
+//                for (int i=0; i<8; i++)
+//                    if (chunks[i] != 0xFFFFFFFF)
+//                        done = false;
+//                if (done || !cnt)
+//                {
                     for (int i=0; i<8; i++)
                         chunks[i] = 0;
-                    sendResponse(aidUpgradePageDone);
-                }
-                else if (newpage > page)
-                {
-                    sendResponse(aidUpgradeRepeat);
-                }
+                    if (((newpage+1) << 11) > size) // if last page
+                    {
+                        int seqcnt = 8*32;
+                        int seq = (size >> 3) & (seqcnt - 1);
+                        for (; seq < seqcnt; seq++)
+                            chunks[seq>>5] |= (1<<(seq&0x1F));
+                    }
+                    
+//                    if (cnt)
+//                        printf("done\n");
+//                    else
+//                        printf("was set\n");
+//                    sendResponse(aidUpgradePageDone);
+//                }
+//                else if (newpage > page)
+//                {
+//                    printf("repeat\n");
+//                    sendResponse(aidUpgradeRepeat);
+//                }
+//                else
+//                {
+//                    printf("error\n");
+//                }
                 page = newpage;                  
               } break;
+              
+              case aidUpgradeProbe:
+              {
+                bool done = true;
+                for (int i=0; i<8; i++)
+                {
+                    if (chunks[i] != 0xFFFFFFFF)
+                        done = false;
+                }
+                if (done || !cnt)
+                {
+//                    for (int i=0; i<8; i++)
+//                        chunks[i] = 0;
+                    printf("done\n");
+                    sendResponse(aidUpgradePageDone);
+                }
+                else
+                {
+                    printf("repeat\n");
+                    sendResponse(aidUpgradeRepeat);
+                }
+                break;
+              }
               
               case aidUpgradeAddress:
                 if (upgradeAccepted && !upgradeStarted)
@@ -408,7 +449,8 @@ void sendResponse(unsigned char aid)
     id.addr = 0;
     id.res = 0;
     id.aid = aid | aidPropagationUp;
-    msg.setGlobalId(id); 
+    msg.setGlobalId(id);
+    //printf("response %02X\n", aid);
     onb->write(msg); 
 }
 
@@ -461,6 +503,8 @@ bool testApp()
             }
         }
     }
+    if (!result)
+        printf("checksum FAIL!\n");
     return result;
 }
 
