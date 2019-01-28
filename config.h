@@ -4,12 +4,13 @@
 |                                                                              |
 \******************************************************************************/
 
-#define UNICTL
+//#define UNICTL
 //#define UNICTL_SLAVE
 //#define GIRLANDA
 //#define EXOCTRL2
 //#define EXOMOTOR
 //#define EXOPULT
+#define NSCONTROL
 
 #if defined(GIRLANDA)
 #define UNICTL
@@ -98,5 +99,14 @@
     
     #define LED_PIN             PB7
     
+#elif defined(NSCONTROL)
+
+    #define WIFI_INTERFACE      1
+    #define ONB_CLASS           (cidHandExoController | 0x02)
+    #define ADDRESS             15
+    #define LED_PIN             PC5
+    #define WIFI_USART_TX       USART6_TX_PC6
+    #define WIFI_USART_RX       USART6_RX_PC7
+    #define WIFI_RESET_PIN      PC8
 
 #endif
