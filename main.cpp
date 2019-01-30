@@ -4,11 +4,19 @@
 #include "led.h"
 #include "flash.h"
 
+#if RADIO_INTERFACE
+#define SWONB
+#endif
+
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
-#include "objnet/canInterface.h"
+    #include "objnet/canInterface.h"
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
-#include "objnet/uartonbinterface.h"
-#include "serial/esp8266.h"
+    #include "objnet/uartonbinterface.h"
+    #include "serial/esp8266.h"
+#elif defined (RADIO_INTERFACE)
+    #include "radio/cc1200.h"
+    #include "objnet/radioonbinterface.h"
+    #include "timer.h"
 #endif
 
 using namespace Objnet;
@@ -31,6 +39,8 @@ Led *ledRed=0L, *ledGreen=0L, *ledBlue=0L;
 
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
 Can *can;
+#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+CC1200 *cc1200;
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
 ESP8266 *wifi;
 #endif
@@ -59,7 +69,7 @@ unsigned char seqs[256];
 
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
 void bootldrTask();
-#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
+#elif (defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1))
 class App : public Application
 {
 private:
@@ -143,23 +153,90 @@ public:
         }
     }
 };
+
+#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+
+class App : public Application
+{
+private:
+    Timer mTimer;
+public:
+    void bootldrTask();    
+    App() : Application()    
+    {
+        DMA_DeInit(DMA1_Stream0);
+        DMA_DeInit(DMA1_Stream1);
+        DMA_DeInit(DMA1_Stream2);
+        DMA_DeInit(DMA1_Stream3);
+        DMA_DeInit(DMA1_Stream4);
+        DMA_DeInit(DMA1_Stream5);
+        DMA_DeInit(DMA1_Stream6);
+        DMA_DeInit(DMA1_Stream7);
+        DMA_DeInit(DMA2_Stream0);
+        DMA_DeInit(DMA2_Stream1);
+        DMA_DeInit(DMA2_Stream2);
+        DMA_DeInit(DMA2_Stream3);
+        DMA_DeInit(DMA2_Stream4);
+        DMA_DeInit(DMA2_Stream5);
+        DMA_DeInit(DMA2_Stream6);
+        DMA_DeInit(DMA2_Stream7);
+      
+        registerTaskEvent(EVENT(&App::bootldrTask));
+        
+        Led *ledTx=0L, *ledRx=0L;
+        #if defined(LED_TX)
+        ledTx = new Led(Gpio::LED_TX, true);
+        #endif
+        #if defined(LED_RX)
+        ledRx = new Led(Gpio::LED_RX, true);
+        #endif
+        
+        // RADIO CC1200
+        Spi *ccSpi = new Spi(RADIO_SPI_PINS);
+        cc1200 = new CC1200(ccSpi, RADIO_CTRL_PINS);
+        cc1200->setGpioPins(RADIO_GPIO_PINS);
+        
+        RadioOnbInterface *rf = new RadioOnbInterface(cc1200);
+        rf->setLeds(ledRx, ledTx);
+        onb = rf;
+        onb->addFilter(0x00800000, 0x10800000); // global service messages
+        onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
+        
+        mTimer.setTimeoutEvent(EVENT(&App::onTimer));
+        mTimer.start(50); 
+    }
+    
+    void onTimer()
+    {      
+        ledBlue->setState(ledcnt);
+        if (mNetAddress == 0x7F && !ledcnt)
+            ledcnt = 2;      
+        if (ledcnt)
+            --ledcnt;
+    }
+};
+    
 #endif
+
 
 int main()
 {    
     bool fromAppFlag = SysTick->CTRL;
-#if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
+#if (defined(CAN_INTERFACE) && (CAN_INTERFACE==1))
+    SysTick->CTRL = 0;
+#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
     SysTick->CTRL = 0;
 //#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
 //    SysTick_Config((Rcc::sysClk() / 1000)); // 1 ms
 #endif
         
-    printf("ExoBoot v1.0\n\n");
+    printf("ExoBoot v1.2\n\n");
     
     bool have = testApp();// && 0;
     if (have && !fromAppFlag)
     {
-        printf("Go to app @ 0x80020000\n");
+        printf("Go to app @ 0x08020000\n");
+        for (int i=0; i<10000; i++);
         unsigned long *ptr = (unsigned long*)base;
         void (*f)(void) = reinterpret_cast<void(*)(void)>(*(ptr + 1));
         __disable_irq();
@@ -178,9 +255,16 @@ int main()
 #if defined(LED_PIN)
     ledBlue  = new Led(Gpio::LED_PIN);
 #else
+    #if defined(LED_RED_PIN)
     ledRed   = new Led(Gpio::LED_RED_PIN);
+    ledRed->off();
+    #endif
+    #if defined(LED_GREEN_PIN)
     ledGreen = new Led(Gpio::LED_GREEN_PIN);
+    #endif
+    #if defined(LED_BLUE_PIN)
     ledBlue  = new Led(Gpio::LED_BLUE_PIN);
+    #endif
 #endif
     
 #if defined(ADDRESS)
@@ -219,6 +303,11 @@ int main()
         bootldrTask();
     }
     
+#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+    printf("Start boot on RADIO interface...\n\n");
+    App *app = new App;
+    app->exec();
+    
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
     printf("Start boot on WiFi interface...\n\n");
     App *app = new App;
@@ -232,6 +321,8 @@ int main()
 
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
 void bootldrTask()
+#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+void App::bootldrTask()
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
 void App::bootldrTask()
 #endif
@@ -248,10 +339,12 @@ void App::bootldrTask()
                 if (upgradeStarted)
                     break;
                 ledcnt = 1;
+                #ifndef SWONB
                 if (mNetAddress == 0x7F)
                     sendMessage(0x7F, svcHello, ByteArray(1, (char)mac));
                 else
                     sendMessage(0x7F, svcEcho);
+                #endif
                 break;
                 
               case aidConnReset:
@@ -275,6 +368,8 @@ void App::bootldrTask()
               } break;
                 
               case aidUpgradeConfirm:
+                if (!upgradeAccepted)
+                    break;
                 size = *reinterpret_cast<unsigned long*>(msg.data().data());
                 printf("Accept firmware, size=%d bytes\n", size);
                 Flash::unlock();
@@ -298,6 +393,10 @@ void App::bootldrTask()
                 if (upgradeStarted)
                 {
                     unsigned char seq = id.res;
+                    static unsigned char oldseq = 0;
+                    if (seq && seq != oldseq+1)
+                        oldseq = seq;
+                    oldseq = seq;
                     chunks[seq>>5] |= (1<<(seq&0x1F));
                     int offset = (seq << 3) + (page << 11);
 //                        if (offset == 8) // replace HardFault_Handler with bootloader's one
@@ -309,6 +408,8 @@ void App::bootldrTask()
                     seqs[seq] = sz;
                     if (ledGreen)
                         ledGreen->toggle();
+                    else if (ledRed)
+                        ledRed->toggle();
                     else
                         ledBlue->toggle();
                     Flash::programData(base+offset, msg.data().data(), sz);
@@ -328,65 +429,70 @@ void App::bootldrTask()
                 break;
                 
               case aidUpgradeSetPage:
-              {
-                int newpage = *reinterpret_cast<unsigned long*>(msg.data().data());
-                printf("page %d... ", newpage);
-//                bool done = true;
-//                for (int i=0; i<8; i++)
-//                    if (chunks[i] != 0xFFFFFFFF)
-//                        done = false;
-//                if (done || !cnt)
-//                {
-                    for (int i=0; i<8; i++)
-                        chunks[i] = 0;
-                    if (((newpage+1) << 11) > size) // if last page
-                    {
-                        int seqcnt = 8*32;
-                        int seq = (size >> 3) & (seqcnt - 1);
-                        for (; seq < seqcnt; seq++)
-                            chunks[seq>>5] |= (1<<(seq&0x1F));
-                    }
-                    
-//                    if (cnt)
-//                        printf("done\n");
-//                    else
-//                        printf("was set\n");
-//                    sendResponse(aidUpgradePageDone);
-//                }
-//                else if (newpage > page)
-//                {
-//                    printf("repeat\n");
-//                    sendResponse(aidUpgradeRepeat);
-//                }
-//                else
-//                {
-//                    printf("error\n");
-//                }
-                page = newpage;                  
-              } break;
-              
-              case aidUpgradeProbe:
-              {
-                bool done = true;
-                for (int i=0; i<8; i++)
+                if (upgradeStarted)
                 {
-                    if (chunks[i] != 0xFFFFFFFF)
-                        done = false;
-                }
-                if (done || !cnt)
-                {
-//                    for (int i=0; i<8; i++)
-//                        chunks[i] = 0;
-                    printf("done\n");
-                    sendResponse(aidUpgradePageDone);
-                }
-                else
-                {
-                    printf("repeat\n");
-                    sendResponse(aidUpgradeRepeat);
+                    int newpage = *reinterpret_cast<unsigned long*>(msg.data().data());
+                    printf("page %d... ", newpage);
+    //                bool done = true;
+    //                for (int i=0; i<8; i++)
+    //                    if (chunks[i] != 0xFFFFFFFF)
+    //                        done = false;
+    //                if (done || !cnt)
+    //                {
+                        for (int i=0; i<8; i++)
+                            chunks[i] = 0;
+                        if (((newpage+1) << 11) > size) // if last page
+                        {
+                            int seqcnt = 8*32;
+                            int seq = (size >> 3) & (seqcnt - 1);
+                            for (; seq < seqcnt; seq++)
+                                chunks[seq>>5] |= (1<<(seq&0x1F));
+                        }
+                        
+    //                    if (cnt)
+    //                        printf("done\n");
+    //                    else
+    //                        printf("was set\n");
+    //                    sendResponse(aidUpgradePageDone);
+    //                }
+    //                else if (newpage > page)
+    //                {
+    //                    printf("repeat\n");
+    //                    sendResponse(aidUpgradeRepeat);
+    //                }
+    //                else
+    //                {
+    //                    printf("error\n");
+    //                }
+                    page = newpage;    
+                    if (ledRed)
+                        ledRed->off();
                 }
                 break;
-              }
+              
+              case aidUpgradeProbe:
+                if (upgradeStarted)
+                {
+                    bool done = true;
+                    for (int i=0; i<8; i++)
+                    {
+                        if (chunks[i] != 0xFFFFFFFF)
+                            done = false;
+                    }
+                    if (done || !cnt)
+                    {
+    //                    for (int i=0; i<8; i++)
+    //                        chunks[i] = 0;
+                        printf("done\n");
+                        sendResponse(aidUpgradePageDone);
+                    }
+                    else
+                    {
+                        printf("repeat\n");
+                        sendResponse(aidUpgradeRepeat);
+                    }
+                }
+                break;
               
               case aidUpgradeAddress:
                 if (upgradeAccepted && !upgradeStarted)
@@ -401,7 +507,13 @@ void App::bootldrTask()
             switch (id.oid)
             {
               case svcHello:
-                mNetAddress = 0x7F;
+                //mNetAddress = 0x7F;
+                #ifdef SWONB
+                if (mNetAddress == 0x7F)
+                    sendMessage(0x7F, svcHello, ByteArray(1, (char)mac));
+                else
+                    sendMessage(0x7F, svcEcho);
+                #endif
                 break;
               
               case svcWelcome:
@@ -409,8 +521,10 @@ void App::bootldrTask()
                 if (msg.data().size() == 1)
                 {
                     mNetAddress = msg.data()[0];
+                    #ifndef SWONB
                     sendMessage(remoteAddr, svcClass, ByteArray(reinterpret_cast<const char*>(&mClass), sizeof(mClass)));
                     sendMessage(remoteAddr, svcName, ByteArray("bootldr"));
+                    #endif
                     sendMessage(remoteAddr, svcEcho);
                 }
                 break;
@@ -430,8 +544,8 @@ void App::bootldrTask()
         }
     }
     
-    if (mNetAddress == 0x7F)
-        ledcnt = 10;
+//    if (mNetAddress == 0x7F)
+//        ledcnt = 10;
     
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
     if (ledcnt)
