@@ -11,7 +11,10 @@
 //#define EXOMOTOR
 //#define EXOPULT
 //#define NSCONTROL
-#define FESMODULE
+//#define FESMODULE
+//#define NSCTRL3_OLD
+#define NSCTRL3
+
 
 #if defined(GIRLANDA)
 #define UNICTL
@@ -122,5 +125,28 @@
     #define RADIO_SPI_PINS      Gpio::SPI3_SCK_PC10, Gpio::SPI3_MISO_PC11, Gpio::SPI3_MOSI_PC12
     #define RADIO_CTRL_PINS     Gpio::PD2, Gpio::PB4
     #define RADIO_GPIO_PINS     Gpio::PB5, Gpio::PB6, Gpio::PB7
+    //#define POWERON_PIN         PC4
+
+#elif defined(NSCTRL3_OLD)
+
+    #define RADIO_INTERFACE     1
+    #define ONB_CLASS           (cidHandExoController | 0x03)
+    #define ADDRESS             0xF
+    #define LED_RED_PIN         PC5, true
+    #define LED_BLUE_PIN        PC4
+    #define RADIO_SPI_PINS      Gpio::SPI2_SCK_PB13, Gpio::SPI2_MISO_PB14, Gpio::SPI2_MOSI_PB15
+    #define RADIO_CTRL_PINS     Gpio::PB12, Gpio::PC9
+    #define RADIO_GPIO_PINS     Gpio::PC6, Gpio::PC7, Gpio::PC8
+
+#elif defined(NSCTRL3)
+
+    #define RADIO_INTERFACE     1
+    #define ONB_CLASS           (cidHandExoController | 0x03)
+    #define ADDRESS             0xF
+    #define LED_RED_PIN         PB0, true
+    #define LED_BLUE_PIN        PB1
+    #define RADIO_SPI_PINS      Gpio::SPI2_SCK_PB13, Gpio::SPI2_MISO_PB14, Gpio::SPI2_MOSI_PB15
+    #define RADIO_CTRL_PINS     Gpio::PB12, Gpio::PC9
+    #define RADIO_GPIO_PINS     Gpio::PC6, Gpio::PC7, Gpio::PC8
 
 #endif

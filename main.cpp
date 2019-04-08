@@ -221,6 +221,12 @@ public:
 
 int main()
 {    
+//#ifdef POWERON_PIN
+//    Gpio *pwrOn = new Gpio(Gpio::POWERON_PIN);
+//    pwrOn->setAsOutput();
+//    pwrOn->set();
+//#endif
+  
     bool fromAppFlag = SysTick->CTRL;
 #if (defined(CAN_INTERFACE) && (CAN_INTERFACE==1))
     SysTick->CTRL = 0;
@@ -249,6 +255,12 @@ int main()
         f();
     }
   
+    #ifdef POWERON_PIN
+    Gpio *pwrOn = new Gpio(Gpio::POWERON_PIN);
+    pwrOn->setAsOutput();
+    pwrOn->set();
+    #endif
+    
     if (!have)
         printf("App not found\n");
     
@@ -352,7 +364,7 @@ void App::bootldrTask()
                     break;
                 mNetAddress = 0x7F;
                 break;
-              
+                
               case aidUpgradeStart:
               {
                 unsigned long classId = *reinterpret_cast<unsigned long*>(msg.data().data());
@@ -363,47 +375,21 @@ void App::bootldrTask()
                         ledRed->on();
                     if (ledGreen)
                         ledGreen->on();
-                    sendResponse(aidUpgradeAccepted);
+//                    sendResponse(aidUpgradeAccepted);
+                    sendMessage(id.addr, svcUpgradeAccepted);
                 }
               } break;
-                
-              case aidUpgradeConfirm:
-                if (!upgradeAccepted)
-                    break;
-                size = *reinterpret_cast<unsigned long*>(msg.data().data());
-                printf("Accept firmware, size=%d bytes\n", size);
-                Flash::unlock();
-                firstSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base));
-                lastSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base+size-1));
-                for (int i=firstSect; i<=lastSect; i++)
-                    Flash::eraseSector(Flash::getSectorByIdx(i));
-                cnt = 0;
-                upgradeStarted = true;
-                upgradeAccepted = false;
-                for (int i=0; i<8; i++)
-                    chunks[i] = 0;
-                if (ledRed)
-                    ledRed->on();
-                if (ledGreen)
-                    ledGreen->off();
-                sendResponse(aidUpgradeReady);
-                break;
                 
               case aidUpgradeData:
                 if (upgradeStarted)
                 {
-                    unsigned char seq = id.res;
+                    unsigned char seq = id.payload;
                     static unsigned char oldseq = 0;
                     if (seq && seq != oldseq+1)
                         oldseq = seq;
                     oldseq = seq;
                     chunks[seq>>5] |= (1<<(seq&0x1F));
                     int offset = (seq << 3) + (page << 11);
-//                        if (offset == 8) // replace HardFault_Handler with bootloader's one
-//                        {
-//                            unsigned long *ptr = (unsigned long*)0x080A000C;
-//                            *reinterpret_cast<unsigned long*>(msg.data().data()) = *ptr;
-//                        }
                     unsigned char sz = msg.data().size();
                     seqs[seq] = sz;
                     if (ledGreen)
@@ -428,84 +414,22 @@ void App::bootldrTask()
                     ledGreen->on();
                 break;
                 
-              case aidUpgradeSetPage:
-                if (upgradeStarted)
-                {
-                    int newpage = *reinterpret_cast<unsigned long*>(msg.data().data());
-                    printf("page %d... ", newpage);
-    //                bool done = true;
-    //                for (int i=0; i<8; i++)
-    //                    if (chunks[i] != 0xFFFFFFFF)
-    //                        done = false;
-    //                if (done || !cnt)
-    //                {
-                        for (int i=0; i<8; i++)
-                            chunks[i] = 0;
-                        if (((newpage+1) << 11) > size) // if last page
-                        {
-                            int seqcnt = 8*32;
-                            int seq = (size >> 3) & (seqcnt - 1);
-                            for (; seq < seqcnt; seq++)
-                                chunks[seq>>5] |= (1<<(seq&0x1F));
-                        }
-                        
-    //                    if (cnt)
-    //                        printf("done\n");
-    //                    else
-    //                        printf("was set\n");
-    //                    sendResponse(aidUpgradePageDone);
-    //                }
-    //                else if (newpage > page)
-    //                {
-    //                    printf("repeat\n");
-    //                    sendResponse(aidUpgradeRepeat);
-    //                }
-    //                else
-    //                {
-    //                    printf("error\n");
-    //                }
-                    page = newpage;    
-                    if (ledRed)
-                        ledRed->off();
-                }
-                break;
-              
-              case aidUpgradeProbe:
-                if (upgradeStarted)
-                {
-                    bool done = true;
-                    for (int i=0; i<8; i++)
-                    {
-                        if (chunks[i] != 0xFFFFFFFF)
-                            done = false;
-                    }
-                    if (done || !cnt)
-                    {
-    //                    for (int i=0; i<8; i++)
-    //                        chunks[i] = 0;
-                        printf("done\n");
-                        sendResponse(aidUpgradePageDone);
-                    }
-                    else
-                    {
-                        printf("repeat\n");
-                        sendResponse(aidUpgradeRepeat);
-                    }
-                }
-                break;
-              
               case aidUpgradeAddress:
                 if (upgradeAccepted && !upgradeStarted)
                     base = *reinterpret_cast<unsigned long*>(msg.data().data());
                 break;
             }            
         }
-        else if (!upgradeStarted)
+        else
         {
             LocalMsgId id = msg.localId();
             unsigned char remoteAddr = msg.localId().sender;
             switch (id.oid)
             {
+              case svcEcho:
+                sendMessage(remoteAddr, svcEcho);
+                break;
+              
               case svcHello:
                 //mNetAddress = 0x7F;
                 #ifdef SWONB
@@ -540,6 +464,113 @@ void App::bootldrTask()
               case svcVersion:
                 sendMessage(remoteAddr, svcVersion, ByteArray(&info->ver, 2));
                 break;
+                
+              case svcRequestAllInfo:
+                sendMessage(remoteAddr, svcVersion, ByteArray(&info->ver, 2));
+                break;
+                
+              // boot protocol:
+              case svcUpgradeRequest:
+              case svcUpgradeStart:
+              {
+                unsigned long classId = *reinterpret_cast<unsigned long*>(msg.data().data());
+                if (classId == mClass)
+                {
+                    upgradeAccepted = true;
+                    if (ledRed)
+                        ledRed->on();
+                    if (ledGreen)
+                        ledGreen->on();
+                    sendMessage(remoteAddr, svcUpgradeAccepted);
+                }
+              } break;
+                
+              case svcUpgradeConfirm:
+                if (!upgradeAccepted)
+                    break;
+                size = *reinterpret_cast<unsigned long*>(msg.data().data());
+                printf("Accept firmware, size=%d bytes\n", size);
+                Flash::unlock();
+                firstSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base));
+                lastSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base+size-1));
+                for (int i=firstSect; i<=lastSect; i++)
+                    Flash::eraseSector(Flash::getSectorByIdx(i));
+                cnt = 0;
+                upgradeStarted = true;
+                upgradeAccepted = false;
+                for (int i=0; i<8; i++)
+                    chunks[i] = 0;
+                if (ledRed)
+                    ledRed->on();
+                if (ledGreen)
+                    ledGreen->off();
+                sendMessage(remoteAddr, svcUpgradeReady);
+                break;
+                
+              case svcUpgradeEnd:
+                Flash::lock();
+                upgradeStarted = false;
+                if (testApp())
+                    NVIC_SystemReset();
+                if (ledRed)
+                    ledRed->off();
+                if (ledGreen)
+                    ledGreen->on();
+                sendMessage(remoteAddr, svcUpgradeEnd);
+                break;
+                
+              case svcUpgradeSetPage:
+                if (upgradeStarted)
+                {
+                    int newpage = *reinterpret_cast<unsigned long*>(msg.data().data());
+                    printf("page %d... ", newpage);
+
+                    for (int i=0; i<8; i++)
+                        chunks[i] = 0;
+                    if (((newpage+1) << 11) > size) // if last page
+                    {
+                        int seqcnt = 8*32;
+                        int seq = (size >> 3) & (seqcnt - 1);
+                        for (; seq < seqcnt; seq++)
+                            chunks[seq>>5] |= (1<<(seq&0x1F));
+                    }
+                        
+                    page = newpage;    
+                    if (ledRed)
+                        ledRed->off();
+                }
+                sendMessage(remoteAddr, svcUpgradeSetPage);
+                break;
+              
+              case svcUpgradeProbe:
+                if (upgradeStarted)
+                {
+                    bool done = true;
+                    for (int i=0; i<8; i++)
+                    {
+                        if (chunks[i] != 0xFFFFFFFF)
+                            done = false;
+                    }
+                    if (done || !cnt)
+                    {
+    //                    for (int i=0; i<8; i++)
+    //                        chunks[i] = 0;
+                        printf("done\n");
+                        sendMessage(remoteAddr, svcUpgradePageDone);
+                    }
+                    else
+                    {
+                        printf("repeat\n");
+                        sendMessage(remoteAddr, svcUpgradeRepeat);
+                    }
+                }
+                break;
+              
+              case svcUpgradeAddress:
+                if (upgradeAccepted && !upgradeStarted)
+                    base = *reinterpret_cast<unsigned long*>(msg.data().data());
+                sendMessage(remoteAddr, svcUpgradeAddress);
+                break;
             }
         }
     }
@@ -561,7 +592,7 @@ void sendResponse(unsigned char aid)
     id.mac = mac;
     id.svc = 1;
     id.addr = 0;
-    id.res = 0;
+    id.payload = 0;
     id.aid = aid | aidPropagationUp;
     msg.setGlobalId(id);
     //printf("response %02X\n", aid);
