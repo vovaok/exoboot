@@ -11,9 +11,9 @@
 //#define EXOMOTOR
 //#define EXOPULT
 //#define NSCONTROL
-//#define FESMODULE
+#define FESMODULE
 //#define NSCTRL3_OLD
-#define NSCTRL3
+//#define NSCTRL3
 
 
 #if defined(GIRLANDA)
@@ -117,7 +117,7 @@
 
     #define RADIO_INTERFACE     1
     #define ONB_CLASS           (cidFesController | 2)
-    #define ADDRESS             (CpuId::serial() & 0xF)
+    #define ADDRESS             ((CpuId::serial() % 15) + 1)
     #define LED_RED_PIN         PC9, true
     #define LED_BLUE_PIN        PC8
     #define LED_RX              PB0
@@ -125,7 +125,7 @@
     #define RADIO_SPI_PINS      Gpio::SPI3_SCK_PC10, Gpio::SPI3_MISO_PC11, Gpio::SPI3_MOSI_PC12
     #define RADIO_CTRL_PINS     Gpio::PD2, Gpio::PB4
     #define RADIO_GPIO_PINS     Gpio::PB5, Gpio::PB6, Gpio::PB7
-    //#define POWERON_PIN         PC4
+    #define POWERON_PIN         PC4
 
 #elif defined(NSCTRL3_OLD)
 
