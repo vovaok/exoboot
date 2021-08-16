@@ -11,9 +11,12 @@
 //#define EXOMOTOR
 //#define EXOPULT
 //#define NSCONTROL
-#define FESMODULE
+//#define FESMODULE
 //#define NSCTRL3_OLD
 //#define NSCTRL3
+#define NSSUPPORT
+//#define DRIVE2
+//#define GRIP2
 
 
 #if defined(GIRLANDA)
@@ -142,11 +145,54 @@
 
     #define RADIO_INTERFACE     1
     #define ONB_CLASS           (cidHandExoController | 0x03)
+//    #define ONB_CLASS           (cidHandExoController | 0x02)
     #define ADDRESS             0xF
     #define LED_RED_PIN         PB0, true
     #define LED_BLUE_PIN        PB1
     #define RADIO_SPI_PINS      Gpio::SPI2_SCK_PB13, Gpio::SPI2_MISO_PB14, Gpio::SPI2_MOSI_PB15
     #define RADIO_CTRL_PINS     Gpio::PB12, Gpio::PC9
     #define RADIO_GPIO_PINS     Gpio::PC6, Gpio::PC7, Gpio::PC8
+
+#elif defined(NSSUPPORT)
+
+    #define SWONB_INTERFACE     1
+    #define ONB_CLASS           (cidSensor | cidEncoder | cidMagnetic | 0x02)
+    #define ADDRESS             13
+    #define LED_PIN             PC6
+    #define SWONB_PIN           USART1_TX_PA9
+
+#elif defined(DRIVE2)
+
+    #define CAN_INTERFACE       1
+
+    #define ONB_CLASS           (cidActuator | cidBrushlessMotor | 0x3F00 | 0x02)
+
+    #define ADDRESS_PIN_0       PA0
+    #define ADDRESS_PIN_1       PA1
+    #define ADDRESS_PIN_2       PA2
+    #define ADDRESS_PIN_3       noPin
+    #define ADDRESS_PULLDOWN    1
+
+    #define LED_PIN             PB2
+
+    #define CAN_RX              CAN1_RX_PA11
+    #define CAN_TX              CAN1_TX_PA12
+
+#elif defined(GRIP2)
+
+    #define CAN_INTERFACE       1
+
+    #define ONB_CLASS           (cidActuator | cidBrushedMotor | 0x2B00 | 0x02)
+
+    #define ADDRESS_PIN_0       PB4
+    #define ADDRESS_PIN_1       PB5
+    #define ADDRESS_PIN_2       PB6
+    #define ADDRESS_PIN_3       PB7
+
+    #define LED_RED_PIN         PA9
+    #define LED_GREEN_PIN        PA8
+
+    #define CAN_RX              CAN1_RX_PB8
+    #define CAN_TX              CAN1_TX_PB9
 
 #endif

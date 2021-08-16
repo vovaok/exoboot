@@ -4,7 +4,7 @@
 #include "led.h"
 #include "flash.h"
 
-#if RADIO_INTERFACE
+#if RADIO_INTERFACE || SWONB_INTERFACE
 #define SWONB
 #endif
 
@@ -16,6 +16,10 @@
 #elif defined (RADIO_INTERFACE)
     #include "radio/cc1200.h"
     #include "objnet/radioonbinterface.h"
+    #include "timer.h"
+#elif defined(SWONB_INTERFACE)
+    #include "usart.h"
+    #include "objnet/uartonbinterface.h"
     #include "timer.h"
 #endif
 
@@ -108,6 +112,8 @@ public:
         
 #if defined(UNICTL)
             wifi->setStationMode("CETKA", "pusipusi");
+#else
+            wifi->setAPMode("Robot", "12345678");
 #endif
         wifi->autoConnectToHost("", 51966);
 
@@ -215,6 +221,58 @@ public:
             --ledcnt;
     }
 };
+
+#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE == 1)
+    
+class App : public Application
+{
+private:
+    Timer mTimer;
+public:
+    void bootldrTask();    
+    App() : Application()    
+    {
+        DMA_DeInit(DMA1_Stream0);
+        DMA_DeInit(DMA1_Stream1);
+        DMA_DeInit(DMA1_Stream2);
+        DMA_DeInit(DMA1_Stream3);
+        DMA_DeInit(DMA1_Stream4);
+        DMA_DeInit(DMA1_Stream5);
+        DMA_DeInit(DMA1_Stream6);
+        DMA_DeInit(DMA1_Stream7);
+        DMA_DeInit(DMA2_Stream0);
+        DMA_DeInit(DMA2_Stream1);
+        DMA_DeInit(DMA2_Stream2);
+        DMA_DeInit(DMA2_Stream3);
+        DMA_DeInit(DMA2_Stream4);
+        DMA_DeInit(DMA2_Stream5);
+        DMA_DeInit(DMA2_Stream6);
+        DMA_DeInit(DMA2_Stream7);
+      
+        registerTaskEvent(EVENT(&App::bootldrTask));
+        
+        Usart *swonbUsart = new Usart(Gpio::USART1_TX_PA9, Gpio::NoConfig);
+        swonbUsart->setBaudrate(1000000);
+        swonbUsart->setConfig(Usart::Mode8E1);
+        swonbUsart->setBufferSize(256);
+        onb = new UartOnbInterface(swonbUsart);
+    
+        onb->addFilter(0x00800000, 0x10800000); // global service messages
+        onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
+        
+        mTimer.setTimeoutEvent(EVENT(&App::onTimer));
+        mTimer.start(50); 
+    }
+    
+    void onTimer()
+    {      
+        ledBlue->setState(ledcnt);
+        if (mNetAddress == 0x7F && !ledcnt)
+            ledcnt = 2;      
+        if (ledcnt)
+            --ledcnt;
+    }
+};
     
 #endif
 
@@ -282,7 +340,11 @@ int main()
 #if defined(ADDRESS)
     mac = ADDRESS & 0x0F;
 #else
+#if defined(ADDRESS_PULLDOWN) && ADDRESS_PULLDOWN == 1
+    const Gpio::Flags f = Gpio::Flags(Gpio::modeIn | Gpio::pullDown);
+#else
     const Gpio::Flags f = Gpio::Flags(Gpio::modeIn | Gpio::pullUp);
+#endif
     if (Gpio(a0, f).read())
         mac |= 0x1;
     if (Gpio(a1, f).read())
@@ -325,6 +387,11 @@ int main()
     App *app = new App;
     app->exec();
     
+#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE==1)
+    printf("Start boot on SWONB interface...\n\n");
+    App *app = new App;
+    app->exec();
+    
 #else    
     printf("No interface!!! FAIL\n");
     while (!onb); // trap if no interface selected
@@ -336,6 +403,8 @@ void bootldrTask()
 #elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
 void App::bootldrTask()
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
+void App::bootldrTask()
+#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE==1)
 void App::bootldrTask()
 #endif
 {
@@ -350,7 +419,7 @@ void App::bootldrTask()
               case aidPollNodes:
                 if (upgradeStarted)
                     break;
-                ledcnt = 1;
+                ledcnt = 100;
                 #ifndef SWONB
                 if (mNetAddress == 0x7F)
                     sendMessage(0x7F, svcHello, ByteArray(1, (char)mac));
@@ -392,10 +461,10 @@ void App::bootldrTask()
                     int offset = (seq << 3) + (page << 11);
                     unsigned char sz = msg.data().size();
                     seqs[seq] = sz;
-                    if (ledGreen)
-                        ledGreen->toggle();
-                    else if (ledRed)
+                    if (ledRed)
                         ledRed->toggle();
+                    else if (ledGreen)
+                        ledGreen->toggle();
                     else
                         ledBlue->toggle();
                     Flash::programData(base+offset, msg.data().data(), sz);
@@ -555,11 +624,15 @@ void App::bootldrTask()
                     {
     //                    for (int i=0; i<8; i++)
     //                        chunks[i] = 0;
+                        if (ledGreen)
+                            ledGreen->on();
                         printf("done\n");
                         sendMessage(remoteAddr, svcUpgradePageDone);
                     }
                     else
                     {
+                        if (ledRed)
+                            ledRed->on();
                         printf("repeat\n");
                         sendMessage(remoteAddr, svcUpgradeRepeat);
                     }
@@ -579,9 +652,9 @@ void App::bootldrTask()
 //        ledcnt = 10;
     
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
+    ledBlue->setState(ledcnt);
     if (ledcnt)
         --ledcnt;
-    ledBlue->setState(ledcnt);
 #endif
 }
 
