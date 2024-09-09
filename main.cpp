@@ -4,12 +4,13 @@
 #include "led.h"
 #include "flash.h"
 
-#if RADIO_INTERFACE || SWONB_INTERFACE
+#if RADIO_INTERFACE || SWONB_INTERFACE || RS485_INTERFACE
 #define SWONB
 #endif
 
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
-    #include "objnet/canInterface.h"
+    #include "objnet/canonbinterface.h"
+    #include "can.h"
 #elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
     #include "objnet/uartonbinterface.h"
     #include "serial/esp8266.h"
@@ -21,6 +22,10 @@
     #include "usart.h"
     #include "objnet/uartonbinterface.h"
     #include "timer.h"
+#elif defined(RS485_INTERFACE)
+    #include "usart.h"
+    #include "objnet/uartonbinterface.h"
+    #include "core/timer.h"
 #endif
 
 using namespace Objnet;
@@ -32,10 +37,17 @@ Gpio::PinName a2 = Gpio::ADDRESS_PIN_2;
 Gpio::PinName a3 = Gpio::ADDRESS_PIN_3;
 #endif
 
+#define printf(...) // disable printf
+
+
 unsigned long mClass = ONB_CLASS;
 
 // base address of flashing
+#if defined(APP_BASE)
+uint32_t base = APP_BASE;
+#else
 unsigned long base = 0x08020000;
+#endif
 
 __appinfo_t__ *info = 0L;
 
@@ -50,6 +62,8 @@ ESP8266 *wifi;
 #endif
 
 ObjnetInterface *onb = 0L;
+uint32_t serial = 0;
+BusType busType;
 
 bool upgradeAccepted = false;
 bool upgradeStarted = false;
@@ -58,7 +72,7 @@ unsigned char mac = 0;
 unsigned char mNetAddress = 0x7F;
 
 int ledcnt = 0;
-int size = 0;
+int fw_size = 0;
 int firstSect = 0, lastSect = 0;
 int cnt = 0;
 int page = 0;
@@ -68,11 +82,50 @@ unsigned long chunks[8];
 bool testApp();
 void sendResponse(unsigned char aid);
 void sendMessage(unsigned char addr, unsigned char oid, const ByteArray &ba=ByteArray());
+void sendMessage(uint8_t addr, uint8_t oid, int value, int size);
 
 unsigned char seqs[256];
 
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
-void bootldrTask();
+//void bootldrTask();
+
+class App : public Application
+{
+public:
+    void bootldrTask();    
+    App() : Application()    
+    {
+//        DMA_DeInit(DMA1_Stream0);
+//        DMA_DeInit(DMA1_Stream1);
+//        DMA_DeInit(DMA1_Stream2);
+//        DMA_DeInit(DMA1_Stream3);
+//        DMA_DeInit(DMA1_Stream4);
+//        DMA_DeInit(DMA1_Stream5);
+//        DMA_DeInit(DMA1_Stream6);
+//        DMA_DeInit(DMA1_Stream7);
+//        DMA_DeInit(DMA2_Stream0);
+//        DMA_DeInit(DMA2_Stream1);
+//        DMA_DeInit(DMA2_Stream2);
+//        DMA_DeInit(DMA2_Stream3);
+//        DMA_DeInit(DMA2_Stream4);
+//        DMA_DeInit(DMA2_Stream5);
+//        DMA_DeInit(DMA2_Stream6);
+//        DMA_DeInit(DMA2_Stream7);
+      
+        registerTaskEvent(EVENT(&App::bootldrTask));
+        
+        can = new Can(Gpio::CAN_RX, Gpio::CAN_TX);
+        onb = new CanOnbInterface(can);
+        onb->addFilter(0x00800000, 0x10800000); // global service messages
+        onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
+        
+        busType = onb->busType();
+        
+        if (ledBlue)
+            ledBlue->blink(50);
+    }
+};
+
 #elif (defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1))
 class App : public Application
 {
@@ -251,7 +304,7 @@ public:
       
         registerTaskEvent(EVENT(&App::bootldrTask));
         
-        Usart *swonbUsart = new Usart(Gpio::USART1_TX_PA9, Gpio::NoConfig);
+        Usart *swonbUsart = new Usart(Gpio::SWONB_PIN, Gpio::NoConfig);
         swonbUsart->setBaudrate(1000000);
         swonbUsart->setConfig(Usart::Mode8E1);
         swonbUsart->setBufferSize(256);
@@ -267,6 +320,60 @@ public:
     void onTimer()
     {      
         ledBlue->setState(ledcnt);
+        if (mNetAddress == 0x7F && !ledcnt)
+            ledcnt = 2;      
+        if (ledcnt)
+            --ledcnt;
+    }
+};
+
+#elif defined(RS485_INTERFACE) && (RS485_INTERFACE == 1)
+    
+class App : public Application
+{
+private:
+    Timer mTimer;
+public:
+    void bootldrTask();    
+    App() : Application()    
+    {
+//        DMA_DeInit(DMA1_Stream0);
+//        DMA_DeInit(DMA1_Stream1);
+//        DMA_DeInit(DMA1_Stream2);
+//        DMA_DeInit(DMA1_Stream3);
+//        DMA_DeInit(DMA1_Stream4);
+//        DMA_DeInit(DMA1_Stream5);
+//        DMA_DeInit(DMA1_Stream6);
+//        DMA_DeInit(DMA1_Stream7);
+//        DMA_DeInit(DMA2_Stream0);
+//        DMA_DeInit(DMA2_Stream1);
+//        DMA_DeInit(DMA2_Stream2);
+//        DMA_DeInit(DMA2_Stream3);
+//        DMA_DeInit(DMA2_Stream4);
+//        DMA_DeInit(DMA2_Stream5);
+//        DMA_DeInit(DMA2_Stream6);
+//        DMA_DeInit(DMA2_Stream7);
+      
+        registerTaskEvent(EVENT(&App::bootldrTask));
+        
+        Usart *usart = new Usart(Gpio::RS485_USART_TX, Gpio::RS485_USART_RX);
+        usart->configPinDE(Gpio::RS485_USART_DE);
+        usart->setBaudrate(RS485_BAUDRATE);
+        usart->setConfig(Usart::Mode8N1);
+        usart->setBufferSize(256);
+        onb = new UartOnbInterface(usart);
+    
+        onb->addFilter(0x00800000, 0x10800000); // global service messages
+        onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
+        
+        mTimer.onTimeout = EVENT(&App::onTimer);
+        mTimer.start(50); 
+    }
+    
+    void onTimer()
+    {      
+        if (ledBlue)
+            ledBlue->setState(ledcnt);
         if (mNetAddress == 0x7F && !ledcnt)
             ledcnt = 2;      
         if (ledcnt)
@@ -293,7 +400,7 @@ int main()
 //#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
 //    SysTick_Config((Rcc::sysClk() / 1000)); // 1 ms
 #endif
-        
+    
     printf("ExoBoot v1.2\n\n");
     
     bool have = testApp();// && 0;
@@ -304,7 +411,7 @@ int main()
         unsigned long *ptr = (unsigned long*)base;
         void (*f)(void) = reinterpret_cast<void(*)(void)>(*(ptr + 1));
         __disable_irq();
-        for (int i=0; i<3; i++)
+        for (int i=0; i<8; i++)
         {
             NVIC->ICER[i] = 0xFFFFFFFF;
             NVIC->ICPR[i] = 0xFFFFFFFF;
@@ -356,11 +463,26 @@ int main()
 #endif
     
 #if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
-    printf("Start boot on CAN interface...\n\n");
-    can = new Can(1, 1000000, Gpio::CAN_RX, Gpio::CAN_TX);
-    onb = new CanInterface(can);
-    onb->addFilter(0x00800000, 0x10800000); // global service messages
-    onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
+    printf("Start boot on CAN interface...\n\n");   
+    
+#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+    printf("Start boot on RADIO interface...\n\n");
+    
+#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
+    printf("Start boot on WiFi interface...\n\n");
+    
+#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE==1)
+    printf("Start boot on SWONB interface...\n\n");
+    
+#elif defined(RS485_INTERFACE) && (RS485_INTERFACE==1)
+    printf("Start boot on RS485 interface...\n\n");
+    
+#else    
+    printf("No interface!!! FAIL\n");
+    while (!onb); // trap if no interface selected
+#endif
+    
+    App app;
     
     if (fromAppFlag)
     {
@@ -372,41 +494,20 @@ int main()
         sendResponse(aidUpgradeAccepted);
     }   
     
-    while (1)
-    {      
-        bootldrTask();
-    }
-    
-#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
-    printf("Start boot on RADIO interface...\n\n");
-    App *app = new App;
-    app->exec();
-    
-#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
-    printf("Start boot on WiFi interface...\n\n");
-    App *app = new App;
-    app->exec();
-    
-#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE==1)
-    printf("Start boot on SWONB interface...\n\n");
-    App *app = new App;
-    app->exec();
-    
-#else    
-    printf("No interface!!! FAIL\n");
-    while (!onb); // trap if no interface selected
-#endif
+    app.exec();
 }
 
-#if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
-void bootldrTask()
-#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+//#if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
+//void bootldrTask()
+//#elif defined(RADIO_INTERFACE) && (RADIO_INTERFACE==1)
+//void App::bootldrTask()
+//#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
+//void App::bootldrTask()
+//#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE==1)
+//void App::bootldrTask()
+//#elif defined(RS485_INTERFACE) && (RS485_INTERFACE==1)
 void App::bootldrTask()
-#elif defined(WIFI_INTERFACE) && (WIFI_INTERFACE==1)
-void App::bootldrTask()
-#elif defined(SWONB_INTERFACE) && (SWONB_INTERFACE==1)
-void App::bootldrTask()
-#endif
+//#endif
 {
     CommonMessage msg;
     if (onb->read(msg))
@@ -419,12 +520,19 @@ void App::bootldrTask()
               case aidPollNodes:
                 if (upgradeStarted)
                     break;
-                ledcnt = 100;
                 #ifndef SWONB
                 if (mNetAddress == 0x7F)
+                {
+                    if (ledBlue)
+                        ledBlue->blinkOnceFor(50);
                     sendMessage(0x7F, svcHello, ByteArray(1, (char)mac));
+                }
                 else
+                {
+                    if (ledBlue)
+                        ledBlue->blinkOnceFor(100);
                     sendMessage(0x7F, svcEcho);
+                }
                 #endif
                 break;
                 
@@ -535,7 +643,15 @@ void App::bootldrTask()
                 break;
                 
               case svcRequestAllInfo:
-                sendMessage(remoteAddr, svcVersion, ByteArray(&info->ver, 2));
+                sendMessage(remoteAddr, svcFullName, "ONB Boot");
+                sendMessage(remoteAddr, svcSerial, serial, 4);
+                sendMessage(remoteAddr, svcVersion, info->ver, 2);
+                sendMessage(remoteAddr, svcBuildDate, ByteArray(info->timestamp, 8));
+                sendMessage(remoteAddr, svcCpuInfo, ByteArray(CpuId::name(), 8));
+                sendMessage(remoteAddr, svcBurnCount, 0, 4);
+                sendMessage(remoteAddr, svcObjectCount, 0, 1);
+                sendMessage(remoteAddr, svcBusType, busType, 1);
+                sendMessage(remoteAddr, svcBusAddress, mac, 1);
                 break;
                 
               // boot protocol:
@@ -557,11 +673,11 @@ void App::bootldrTask()
               case svcUpgradeConfirm:
                 if (!upgradeAccepted)
                     break;
-                size = *reinterpret_cast<unsigned long*>(msg.data().data());
-                printf("Accept firmware, size=%d bytes\n", size);
+                fw_size = *reinterpret_cast<unsigned long*>(msg.data().data());
+                printf("Accept firmware, size=%d bytes\n", fw_size);
                 Flash::unlock();
                 firstSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base));
-                lastSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base+size-1));
+                lastSect = Flash::getIdxOfSector(Flash::getSectorByAddress(base+fw_size-1));
                 for (int i=firstSect; i<=lastSect; i++)
                     Flash::eraseSector(Flash::getSectorByIdx(i));
                 cnt = 0;
@@ -596,10 +712,10 @@ void App::bootldrTask()
 
                     for (int i=0; i<8; i++)
                         chunks[i] = 0;
-                    if (((newpage+1) << 11) > size) // if last page
+                    if (((newpage+1) << 11) > fw_size) // if last page
                     {
                         int seqcnt = 8*32;
-                        int seq = (size >> 3) & (seqcnt - 1);
+                        int seq = (fw_size >> 3) & (seqcnt - 1);
                         for (; seq < seqcnt; seq++)
                             chunks[seq>>5] |= (1<<(seq&0x1F));
                     }
@@ -651,11 +767,11 @@ void App::bootldrTask()
 //    if (mNetAddress == 0x7F)
 //        ledcnt = 10;
     
-#if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
-    ledBlue->setState(ledcnt);
-    if (ledcnt)
-        --ledcnt;
-#endif
+//#if defined(CAN_INTERFACE) && (CAN_INTERFACE==1)
+//    ledBlue->setState(ledcnt);
+//    if (ledcnt)
+//        --ledcnt;
+//#endif
 }
 
 void sendResponse(unsigned char aid)
@@ -672,6 +788,11 @@ void sendResponse(unsigned char aid)
     onb->write(msg); 
 }
 
+void sendMessage(uint8_t addr, uint8_t oid, int value, int size)
+{
+    sendMessage(addr, oid, ByteArray(&value, size));
+}
+
 void sendMessage(unsigned char addr, unsigned char oid, const ByteArray &ba)
 {
     CommonMessage msg;
@@ -682,16 +803,16 @@ void sendMessage(unsigned char addr, unsigned char oid, const ByteArray &ba)
     id.sender = mNetAddress;
     id.oid = oid;
     msg.setLocalId(id);
-    msg.setData(ba);
+    msg.copyData(ba);
     onb->write(msg);
 }
-
+                            
 bool testApp()
 { 
     unsigned long *app = reinterpret_cast<unsigned long*>(base);
     int sz = (CpuId::flashSizeK() * 0x400 - 0x60000) / 4;
-    if (size)
-        sz = size / 4;
+    if (fw_size)
+        sz = fw_size / 4;
     unsigned long cs = 0;
     bool result = false;
     for (int i=0; i<sz; i++)
@@ -715,8 +836,8 @@ bool testApp()
                 }                
                 if (info->length < sz*4)
                 {
-                    size = info->length;
-                    sz = size / 4;
+                    fw_size = info->length;
+                    sz = fw_size / 4;
                 }
             }
         }

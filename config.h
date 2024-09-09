@@ -14,9 +14,13 @@
 //#define FESMODULE
 //#define NSCTRL3_OLD
 //#define NSCTRL3
-#define NSSUPPORT
+//#define NSSUPPORT
 //#define DRIVE2
 //#define GRIP2
+//#define DRIVE3
+//#define DRIVE4_CAN
+//#define DRIVE4_RS485
+#define LAGRANGE_CB
 
 
 #if defined(GIRLANDA)
@@ -190,9 +194,81 @@
     #define ADDRESS_PIN_3       PB7
 
     #define LED_RED_PIN         PA9
-    #define LED_GREEN_PIN        PA8
+    #define LED_GREEN_PIN       PA8
 
     #define CAN_RX              CAN1_RX_PB8
     #define CAN_TX              CAN1_TX_PB9
+
+#elif defined(DRIVE3)
+
+    #define CAN_INTERFACE       1
+
+    #define ONB_CLASS           (cidActuator | cidBrushlessMotor | 0x3F00 | 0x03)
+
+    #define ADDRESS_PIN_0       PB4
+    #define ADDRESS_PIN_1       PB5
+    #define ADDRESS_PIN_2       PB6
+    #define ADDRESS_PIN_3       PB7
+    #define ADDRESS_PULLDOWN    0
+
+    #define LED_PIN             PB2
+
+    #define CAN_RX              CAN1_RX_PB8
+    #define CAN_TX              CAN1_TX_PB9
+
+#elif defined(DRIVE4_CAN)
+
+    #define CAN_INTERFACE       1
+
+    #define ONB_CLASS           (cidActuator | cidBrushlessMotor | 0x3F00 | 0x04)
+
+    #define ADDRESS_PIN_0       PA3
+    #define ADDRESS_PIN_1       PA4
+    #define ADDRESS_PIN_2       PA5
+    #define ADDRESS_PIN_3       PA6
+    #define ADDRESS_PULLDOWN    0
+
+    #define LED_RED_PIN         PA1
+    #define LED_GREEN_PIN       PA0
+
+    #define CAN_RX              CAN1_RX_PB8
+    #define CAN_TX              CAN1_TX_PB9
+
+#elif defined(DRIVE4_RS485)
+
+    #define RS485_INTERFACE     1
+    #define RS485_BAUDRATE      1000000
+
+    #define ONB_CLASS           (cidActuator | cidBrushlessMotor | 0x3F00 | 0x04)
+
+    #define ADDRESS_PIN_0       PA3
+    #define ADDRESS_PIN_1       PA4
+    #define ADDRESS_PIN_2       PA5
+    #define ADDRESS_PIN_3       PA6
+    #define ADDRESS_PULLDOWN    0
+
+    #define LED_RED_PIN         PA1
+    #define LED_GREEN_PIN       PA0
+
+    #define RS485_USART_TX      USART1_TX_PA9
+    #define RS485_USART_RX      USART1_RX_PA10
+    #define RS485_USART_DE      PA11
+
+#elif defined(LAGRANGE_CB)
+
+    #define CAN_INTERFACE       1
+
+    #define ONB_CLASS           (cidController | cidMechanical | cidLeggedRobot | 0x02)
+
+    #define ADDRESS             1
+
+    #define LED_RED_PIN         PD12
+    #define LED_GREEN_PIN       PC6
+    #define LED_BLUE_PIN        PC0
+
+    #define CAN_RX              CAN1_RX_PD0
+    #define CAN_TX              CAN1_TX_PD1
+
+    #define APP_BASE            0x08010000
 
 #endif

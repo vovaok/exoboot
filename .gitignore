@@ -28,3 +28,5 @@ _ReSharper*/
 settings/
 stm32f4*/
 *.dep
+*.ewd
+*.ewt
