@@ -26,6 +26,9 @@
     #include "usart.h"
     #include "objnet/uartonbinterface.h"
     #include "core/timer.h"
+#elif defined(VCP_INTERFACE) && (VCP_INTERFACE==1)
+    #include "objnet/uartonbinterface.h"
+    #include "serial/usbvcp.h"
 #endif
 
 using namespace Objnet;
@@ -380,6 +383,45 @@ public:
             --ledcnt;
     }
 };
+
+#elif defined(VCP_INTERFACE) && (VCP_INTERFACE==1)
+
+class App : public Application
+{
+public:
+    void bootldrTask();    
+    App() : Application()    
+    {
+//        DMA_DeInit(DMA1_Stream0);
+//        DMA_DeInit(DMA1_Stream1);
+//        DMA_DeInit(DMA1_Stream2);
+//        DMA_DeInit(DMA1_Stream3);
+//        DMA_DeInit(DMA1_Stream4);
+//        DMA_DeInit(DMA1_Stream5);
+//        DMA_DeInit(DMA1_Stream6);
+//        DMA_DeInit(DMA1_Stream7);
+//        DMA_DeInit(DMA2_Stream0);
+//        DMA_DeInit(DMA2_Stream1);
+//        DMA_DeInit(DMA2_Stream2);
+//        DMA_DeInit(DMA2_Stream3);
+//        DMA_DeInit(DMA2_Stream4);
+//        DMA_DeInit(DMA2_Stream5);
+//        DMA_DeInit(DMA2_Stream6);
+//        DMA_DeInit(DMA2_Stream7);
+      
+        registerTaskEvent(EVENT(&App::bootldrTask));
+        
+        UsbVcp *vcp = new UsbVcp(UsbDevice::USB_CORE, "ONB");
+        onb = new UartOnbInterface(vcp);
+        onb->addFilter(0x00800000, 0x10800000); // global service messages
+        onb->addFilter(0x10800000 | (mac << 24), 0x1F800000); // local service messages
+        
+        busType = onb->busType();
+        
+        if (ledBlue)
+            ledBlue->blink(50);
+    }
+};
     
 #endif
 
@@ -476,6 +518,9 @@ int main()
     
 #elif defined(RS485_INTERFACE) && (RS485_INTERFACE==1)
     printf("Start boot on RS485 interface...\n\n");
+    
+#elif defined(VCP_INTERFACE) && (VCP_INTERFACE==1)
+    printf("Start boot on VCP interface...\n\n");
     
 #else    
     printf("No interface!!! FAIL\n");

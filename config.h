@@ -20,7 +20,8 @@
 //#define DRIVE3
 //#define DRIVE4_CAN
 //#define DRIVE4_RS485
-#define LAGRANGE_CB
+//#define LAGRANGE_CB
+#define LAGRANGE_PB
 
 
 #if defined(GIRLANDA)
@@ -270,5 +271,22 @@
     #define CAN_TX              CAN1_TX_PD1
 
     #define APP_BASE            0x08010000
+
+#elif defined(LAGRANGE_PB)
+
+    #define VCP_INTERFACE       1
+
+    #define ONB_CLASS           0xF2C43CA5
+
+    #define ADDRESS             13
+
+    #define LED_RED_PIN         PC0
+    #define LED_GREEN_PIN       PC1
+    #define LED_BLUE_PIN        PB15
+
+    #define USB_CORE            OtgFs
+
+    #define APP_BASE            0x08010000
+
 
 #endif

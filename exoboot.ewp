@@ -74,7 +74,7 @@
                 </option>
                 <option>
                     <name>OGChipSelectEditMenu</name>
-                    <state>GD32F405xG	GigaDevice GD32F405xG</state>
+                    <state>STM32F405RG	ST STM32F405RG</state>
                 </option>
                 <option>
                     <name>GenLowLevelInterface</name>
@@ -120,7 +120,7 @@
                 </option>
                 <option>
                     <name>GFPUDeviceSlave</name>
-                    <state>GD32F405xG	GigaDevice GD32F405xG</state>
+                    <state>STM32F405RG	ST STM32F405RG</state>
                 </option>
                 <option>
                     <name>FPU2</name>
